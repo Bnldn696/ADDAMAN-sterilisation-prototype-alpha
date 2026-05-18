@@ -1,0 +1,7 @@
+{
+  "name": "ADDAMAN sterilisation prototype alpha",
+  "description": "App to manage sterilization workflow, boxes, equipment, consumables, and reports for Polyclinique Addaman for personnal sterilization use only.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
