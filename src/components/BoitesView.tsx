@@ -6,6 +6,7 @@ import { Search, ChevronRight, ThumbsUp, ThumbsDown, Minus, ArrowLeft, Image as 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { CameraScanner } from './CameraScanner';
+import { MultiImagePicker } from './MultiImagePicker';
 import {
   DndContext,
   closestCenter,
@@ -207,7 +208,7 @@ export const BoitesView: React.FC = () => {
   const [newBoiteType, setNewBoiteType] = useState<'Boite' | 'Tambour'>('Boite');
 
   const [showAddInstrument, setShowAddInstrument] = useState(false);
-  const [newInstrument, setNewInstrument] = useState({ name: '', serialNumber: '', imageUrl: '' });
+  const [newInstrument, setNewInstrument] = useState({ name: '', serialNumber: '', imageUrl: '', imageUrls: [] as string[] });
 
   const [showEditInstrument, setShowEditInstrument] = useState(false);
   const [instrumentToEdit, setInstrumentToEdit] = useState<Instrument | null>(null);
@@ -386,15 +387,6 @@ export const BoitesView: React.FC = () => {
     };
     updateBoite(updatedTargetBoite);
 
-    addRapport({
-      id: `rap-copy-${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
-      title: `Instruments copiés: ${targetBoite.name}`,
-      content: `${instrumentsToCopy.length} instrument(s) ont été copiés depuis la boîte "${selectedBoite.name}" vers la boîte "${targetBoite.name}".\nInstruments: ${instrumentsToCopy.map((i: any) => i.name).join(', ')}`,
-      type: 'Instruction',
-      author: state.currentUser || 'Système'
-    });
-
     // We DO NOT remove from the current boite as this is a Copy action.
     
     setSelectedInstrumentsForAction([]);
@@ -429,12 +421,16 @@ export const BoitesView: React.FC = () => {
   const handleAddInstrumentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBoite) return;
+    const firstImageUrl = newInstrument.imageUrls && newInstrument.imageUrls.length > 0 
+      ? newInstrument.imageUrls[0] 
+      : (newInstrument.imageUrl || 'https://images.unsplash.com/photo-1584362917165-526a968579e8?w=400&h=300&fit=crop');
     const inst: Instrument = {
       id: `i${Date.now()}`,
       name: newInstrument.name,
       serialNumber: newInstrument.serialNumber,
       status: 'Good',
-      imageUrl: newInstrument.imageUrl || 'https://images.unsplash.com/photo-1584362917165-526a968579e8?w=400&h=300&fit=crop',
+      imageUrl: firstImageUrl,
+      imageUrls: newInstrument.imageUrls || [],
       lastUpdatedBy: state.currentUser || 'Système'
     };
     const updatedBoite = {
@@ -445,16 +441,24 @@ export const BoitesView: React.FC = () => {
     updateBoite(updatedBoite);
     setSelectedBoite(updatedBoite);
     setShowAddInstrument(false);
-    setNewInstrument({ name: '', serialNumber: '', imageUrl: '' });
+    setNewInstrument({ name: '', serialNumber: '', imageUrl: '', imageUrls: [] });
   };
 
   const handleEditInstrumentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBoite || !instrumentToEdit) return;
     
+    const firstImageUrl = instrumentToEdit.imageUrls && instrumentToEdit.imageUrls.length > 0 
+      ? instrumentToEdit.imageUrls[0] 
+      : instrumentToEdit.imageUrl;
+
     const updatedInstruments = selectedBoite.instruments.map(i => {
       if (i.id === instrumentToEdit.id) {
-        return { ...instrumentToEdit, lastUpdatedBy: state.currentUser || 'Système' };
+        return { 
+          ...instrumentToEdit, 
+          imageUrl: firstImageUrl,
+          lastUpdatedBy: state.currentUser || 'Système' 
+        };
       }
       return i;
     });
@@ -684,7 +688,7 @@ export const BoitesView: React.FC = () => {
                           id: `r${Date.now()}`,
                           date: new Date().toISOString().split('T')[0],
                           title: `STATUS: BOITE COMPLETE`,
-                          content: `Boite Name: ${selectedBoite.name}\nVerification: All instruments (Copied from Master List) are verified.`,
+                          content: `Boite Name: ${selectedBoite.name}\nVerification: Tous les instruments sont vérifiés.`,
                           type: 'Instruction'
                         });
                       }
@@ -856,60 +860,11 @@ export const BoitesView: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Image de l'instrument</label>
-                    <div className="space-y-3">
-                      <input
-                        type="url"
-                        value={newInstrument.imageUrl}
-                        onChange={(e) => setNewInstrument({ ...newInstrument, imageUrl: e.target.value })}
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:ring-teal-500 focus:border-teal-500"
-                        placeholder="URL de l'image (https://...)"
-                      />
-                      <div className="flex flex-col gap-2">
-                        <span className="text-sm text-slate-500 text-center">ou</span>
-                        <div className="flex gap-2">
-                          <label className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl cursor-pointer transition-colors border border-slate-200 border-dashed">
-                            <Upload className="h-4 w-4" />
-                            <span className="text-sm font-medium">Télécharger</span>
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              className="hidden" 
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    setNewInstrument({ ...newInstrument, imageUrl: reader.result as string });
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }} 
-                            />
-                          </label>
-                          <label className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl cursor-pointer transition-colors border border-slate-200 border-dashed">
-                            <Camera className="h-4 w-4" />
-                            <span className="text-sm font-medium">Prendre photo</span>
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              capture="environment"
-                              className="hidden" 
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    setNewInstrument({ ...newInstrument, imageUrl: reader.result as string });
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }} 
-                            />
-                          </label>
-                        </div>
-                      </div>
-                    </div>
+                    <MultiImagePicker
+                      images={newInstrument.imageUrls || []}
+                      onChange={(imgs) => setNewInstrument({ ...newInstrument, imageUrls: imgs })}
+                      label="Photos de l'instrument"
+                    />
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={() => setShowAddInstrument(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Annuler</button>
@@ -972,60 +927,11 @@ export const BoitesView: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Image de l'instrument</label>
-                    <div className="space-y-3">
-                      <input
-                        type="url"
-                        value={instrumentToEdit.imageUrl}
-                        onChange={(e) => setInstrumentToEdit({ ...instrumentToEdit, imageUrl: e.target.value })}
-                        className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="URL de l'image (https://...)"
-                      />
-                      <div className="flex flex-col gap-2">
-                        <span className="text-sm text-slate-500 text-center">ou</span>
-                        <div className="flex gap-2">
-                          <label className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl cursor-pointer transition-colors border border-slate-200 border-dashed">
-                            <Upload className="h-4 w-4" />
-                            <span className="text-sm font-medium">Télécharger</span>
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              className="hidden" 
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    setInstrumentToEdit({ ...instrumentToEdit, imageUrl: reader.result as string });
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }} 
-                            />
-                          </label>
-                          <label className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl cursor-pointer transition-colors border border-slate-200 border-dashed">
-                            <Camera className="h-4 w-4" />
-                            <span className="text-sm font-medium">Prendre photo</span>
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              capture="environment"
-                              className="hidden" 
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    setInstrumentToEdit({ ...instrumentToEdit, imageUrl: reader.result as string });
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }} 
-                            />
-                          </label>
-                        </div>
-                      </div>
-                    </div>
+                    <MultiImagePicker
+                      images={instrumentToEdit.imageUrls || (instrumentToEdit.imageUrl ? [instrumentToEdit.imageUrl] : [])}
+                      onChange={(imgs) => setInstrumentToEdit({ ...instrumentToEdit, imageUrls: imgs })}
+                      label="Photos de l'instrument"
+                    />
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={() => { setShowEditInstrument(false); setInstrumentToEdit(null); }} className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Annuler</button>
@@ -1119,7 +1025,7 @@ export const BoitesView: React.FC = () => {
                         id: `r${Date.now()}`,
                         date: new Date().toISOString().split('T')[0],
                         title: `STATUS: BOITE COMPLETE`,
-                        content: `Boite Name: ${selectedBoite.name}\nVerification: All instruments (Copied from Master List) are verified.`,
+                        content: `Boite Name: ${selectedBoite.name}\nVerification: Tous les instruments sont vérifiés.`,
                         type: 'Instruction'
                       });
                       

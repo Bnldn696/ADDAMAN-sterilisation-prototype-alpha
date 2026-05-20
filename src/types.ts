@@ -10,6 +10,7 @@ export interface Instrument {
   imageUrl: string;
   lastUpdatedBy?: string;
   comment?: string;
+  imageUrls?: string[];
 }
 
 export interface Boite {
@@ -21,6 +22,7 @@ export interface Boite {
   lastUpdatedBy?: string;
   comment?: string;
   imageUrl?: string;
+  imageUrls?: string[];
 }
 
 export interface AutoclaveTest {
@@ -73,6 +75,7 @@ export interface Rapport {
   type: 'Report' | 'Instruction';
   category?: 'Maintenance' | 'Panne' | 'Vérification incomplète' | 'Réforme' | 'Test Bowie-Dick non réussite' | 'Autre' | string;
   attachmentUrl?: string; // For images or PDFs (mocked as data URL or external URL)
+  attachmentUrls?: string[];
   author?: string;
 }
 
@@ -104,6 +107,7 @@ export interface ReformeItem {
   name: string;
   reference?: string;
   imageUrl?: string;
+  imageUrls?: string[];
   dateAdded: string;
   comment?: string;
 }

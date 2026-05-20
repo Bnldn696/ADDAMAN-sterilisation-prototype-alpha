@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../hooks/useStore';
 import { PackageOpen, AlertTriangle, CheckCircle2, Download, X, Edit, MessageSquare, ChevronRight, Info, ArrowLeft, Trash2 } from 'lucide-react';
+import { MultiImagePicker } from './MultiImagePicker';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Instrument, Boite, ReformeItem } from '../types';
@@ -19,6 +20,7 @@ export const InventoryView: React.FC = () => {
     const [editStatus, setEditStatus] = useState<'Good' | 'Fair' | 'Bad'>('Good');
     const [editComment, setEditComment] = useState('');
     const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
+    const [editImageUrls, setEditImageUrls] = useState<string[]>([]);
     
     const [editingReforme, setEditingReforme] = useState<ReformeItem | null>(null);
 
@@ -47,7 +49,13 @@ export const InventoryView: React.FC = () => {
     const handleSaveBoite = () => {
         const boite = state.boites.find(b => b.id === selectedBoiteId);
         if (boite) {
-            updateBoite({ ...boite, status: editStatus, comment: editComment, imageUrl: editImageUrl || boite.imageUrl });
+            updateBoite({ 
+                ...boite, 
+                status: editStatus, 
+                comment: editComment, 
+                imageUrl: editImageUrls[0] || editImageUrl || boite.imageUrl,
+                imageUrls: editImageUrls
+            });
         }
         setSelectedBoiteId(null);
     };
@@ -56,7 +64,13 @@ export const InventoryView: React.FC = () => {
         if (!selectedInstForDetail) return;
         const boite = state.boites.find(b => b.id === selectedInstForDetail.boiteId);
         if (boite) {
-            const newInstruments = boite.instruments.map(i => i.id === selectedInstForDetail.id ? {...i, status: editStatus, comment: editComment, imageUrl: editImageUrl || i.imageUrl} : i);
+            const newInstruments = boite.instruments.map(i => i.id === selectedInstForDetail.id ? {
+                ...i, 
+                status: editStatus, 
+                comment: editComment, 
+                imageUrl: editImageUrls[0] || editImageUrl || i.imageUrl,
+                imageUrls: editImageUrls
+            } : i);
             updateBoite({ ...boite, instruments: newInstruments });
         }
         setSelectedInstForDetail(null);
@@ -269,8 +283,21 @@ export const InventoryView: React.FC = () => {
                         <button onClick={() => setSelectedInstForDetail(null)} className='p-2 hover:bg-slate-100 rounded-full'><X/></button>
                     </div>
                     
-                    {currentImageUrl && (
-                        <img src={currentImageUrl} alt={selectedInstForDetail.name} className='w-full h-48 object-cover rounded-2xl mb-6' />
+                    {editImageUrls && editImageUrls.length > 0 ? (
+                        <div className="space-y-2 mb-6">
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Photos actuelles ({editImageUrls.length})</label>
+                            <div className="flex gap-2.5 overflow-x-auto pb-1.5">
+                                {editImageUrls.map((imgUrl, imgIdx) => (
+                                    <div key={imgIdx} className="relative h-28 w-28 rounded-2xl overflow-hidden border border-slate-100 shadow-sm shrink-0">
+                                        <img src={imgUrl} alt={`ins-img-${imgIdx}`} className="h-full w-full object-cover" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        currentImageUrl && (
+                            <img src={currentImageUrl} alt={selectedInstForDetail.name} className='w-full h-48 object-cover rounded-2xl mb-6' />
+                        )
                     )}
                     <p className="text-slate-500 mb-6">Boîte: {selectedInstForDetail.boiteName} • Référence: {selectedInstForDetail.serialNumber || 'N/A'}</p>
 
@@ -281,18 +308,9 @@ export const InventoryView: React.FC = () => {
                         <option value="Bad">Mauvais</option>
                     </select>
 
-                    {(editStatus === 'Fair' || editStatus === 'Bad') && (
-                        <div className="mb-6">
-                            <label className="block mb-2 font-medium text-slate-700">Photo de l'état (Optionnelle)</label>
-                            <input 
-                                type="file" 
-                                accept="image/*" 
-                                capture="environment" 
-                                onChange={handleImageUpload} 
-                                className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100" 
-                            />
-                        </div>
-                    )}
+                    <div className="mb-6">
+                        <MultiImagePicker images={editImageUrls} onChange={setEditImageUrls} label="Changer ou ajouter des photos" />
+                    </div>
 
                     <label className="block mb-2 font-medium text-slate-700">Commentaire</label>
                     <textarea className="w-full border-2 border-slate-200 p-3 rounded-xl mb-6 bg-slate-50 focus:border-teal-500 transition" rows={3} value={editComment} onChange={(e) => setEditComment(e.target.value)} placeholder="Ajouter un commentaire..." />
@@ -321,8 +339,21 @@ export const InventoryView: React.FC = () => {
                     <div className="bg-white p-6 rounded-2xl shadow-sm border space-y-6">
                         <h3 className="font-bold text-xl text-slate-800">Détails Boîte</h3>
                         
-                        {currentImageUrl && (
-                            <img src={currentImageUrl} alt={boite.name} className='w-full h-48 object-cover rounded-2xl' />
+                        {editImageUrls && editImageUrls.length > 0 ? (
+                            <div className="space-y-2 mb-6">
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Photos actuelles ({editImageUrls.length})</label>
+                                <div className="flex gap-2.5 overflow-x-auto pb-1.5">
+                                    {editImageUrls.map((imgUrl, imgIdx) => (
+                                        <div key={imgIdx} className="relative h-28 w-28 rounded-2xl overflow-hidden border border-slate-100 shadow-sm shrink-0">
+                                            <img src={imgUrl} alt={`boite-img-${imgIdx}`} className="h-full w-full object-cover" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            currentImageUrl && (
+                                <img src={currentImageUrl} alt={boite.name} className='w-full h-48 object-cover rounded-2xl' />
+                            )
                         )}
 
                         <div>
@@ -334,18 +365,9 @@ export const InventoryView: React.FC = () => {
                             </select>
                         </div>
                         
-                        {(editStatus === 'Fair' || editStatus === 'Bad') && (
-                            <div>
-                                <label className="block mb-2 font-medium text-slate-700">Photo de l'état (Optionnelle)</label>
-                                <input 
-                                    type="file" 
-                                    accept="image/*" 
-                                    capture="environment" 
-                                    onChange={handleImageUpload} 
-                                    className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100" 
-                                />
-                            </div>
-                        )}
+                        <div className="mb-6">
+                            <MultiImagePicker images={editImageUrls} onChange={setEditImageUrls} label="Changer ou ajouter des photos" />
+                        </div>
 
                         <div>
                             <label className="block mb-2 font-medium text-slate-700">Commentaire</label>
@@ -362,7 +384,8 @@ export const InventoryView: React.FC = () => {
                                     setSelectedInstForDetail({...inst, boiteId: boite.id, boiteName: boite.name});
                                     setEditStatus(inst.status);
                                     setEditComment(inst.comment || '');
-                                    setEditImageUrl(null);
+                                    setEditImageUrl(inst.imageUrl || null);
+                                    setEditImageUrls(inst.imageUrls || (inst.imageUrl ? [inst.imageUrl] : []));
                                 }} className="w-full flex justify-between items-center p-3 hover:bg-slate-50 border rounded-xl transition">
                                     <div className="flex items-center gap-3 text-left">
                                         {inst.imageUrl ? <img src={inst.imageUrl} alt={inst.name} className="h-10 w-10 rounded-lg object-cover" /> : <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">N/A</div>}
@@ -460,7 +483,13 @@ export const InventoryView: React.FC = () => {
             {activeTab !== 'reformes' && (
                 <div className="bg-white rounded-2xl border shadow-sm p-2">
                     {(activeTab === 'boites' || activeTab === 'tambours') && inventoryData[activeTab].map(b => (
-                        <button key={b.id} onClick={() => {setSelectedBoiteId(b.id); setEditStatus(b.status); setEditComment(b.comment || ''); setEditImageUrl(null);}} className="w-full flex justify-between items-center p-4 hover:bg-slate-50 border-b last:border-b-0 rounded-lg transition">
+                        <button key={b.id} onClick={() => {
+                            setSelectedBoiteId(b.id); 
+                            setEditStatus(b.status); 
+                            setEditComment(b.comment || ''); 
+                            setEditImageUrl(b.imageUrl || null);
+                            setEditImageUrls(b.imageUrls || (b.imageUrl ? [b.imageUrl] : []));
+                        }} className="w-full flex justify-between items-center p-4 hover:bg-slate-50 border-b last:border-b-0 rounded-lg transition">
                             <span className="font-semibold text-slate-800">{b.name}</span>
                             <div className='flex items-center gap-3'>
                                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusStyle(b.status)}`}>{b.status}</span>
@@ -470,7 +499,13 @@ export const InventoryView: React.FC = () => {
                     ))}
                     
                     {activeTab === 'instruments' && selectedInstStatus && inventoryData.instruments.filter(i => i.status === selectedInstStatus).map(i => (
-                        <button key={i.id} onClick={() => {setSelectedInstForDetail({...i, boiteId: i.boiteId, boiteName: i.boiteName}); setEditStatus(i.status); setEditComment(i.comment || ''); setEditImageUrl(null);}} className="w-full flex justify-between items-center p-4 hover:bg-slate-50 border-b last:border-b-0 rounded-lg transition">
+                        <button key={i.id} onClick={() => {
+                            setSelectedInstForDetail({...i, boiteId: i.boiteId, boiteName: i.boiteName}); 
+                            setEditStatus(i.status); 
+                            setEditComment(i.comment || ''); 
+                            setEditImageUrl(i.imageUrl || null);
+                            setEditImageUrls(i.imageUrls || (i.imageUrl ? [i.imageUrl] : []));
+                        }} className="w-full flex justify-between items-center p-4 hover:bg-slate-50 border-b last:border-b-0 rounded-lg transition">
                             <div className='flex items-center gap-4'>
                                 {i.imageUrl ? <img src={i.imageUrl} alt={i.name} className='h-12 w-12 rounded-lg object-cover'/> : <div className="h-12 w-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs">N/A</div>}
                                 <div className='text-left'>

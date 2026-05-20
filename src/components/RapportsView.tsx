@@ -4,6 +4,7 @@ import { Rapport } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileText, Plus, Calendar, X, Image as ImageIcon, Paperclip, CheckCircle2, Trash2, Edit2, Mail, Download, Eye, ArrowLeft, Tags } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { MultiImagePicker } from './MultiImagePicker';
 
 export const RapportsView: React.FC = () => {
   const { state, addRapport, deleteRapport, updateRapport } = useStore();
@@ -64,20 +65,27 @@ export const RapportsView: React.FC = () => {
       yPos += 7;
     }
     
-    if (rapport.attachmentUrl && rapport.attachmentUrl.startsWith('data:image')) {
-      try {
-        if (yPos + 110 > 280) {
-          doc.addPage();
-          yPos = 20;
-        } else {
-          yPos += 10;
+    const imagesToPrint = (rapport.attachmentUrls && rapport.attachmentUrls.length > 0)
+      ? rapport.attachmentUrls
+      : (rapport.attachmentUrl ? [rapport.attachmentUrl] : []);
+
+    imagesToPrint.forEach((url) => {
+      if (url && url.startsWith('data:image')) {
+        try {
+          if (yPos + 110 > 280) {
+            doc.addPage();
+            yPos = 20;
+          } else {
+            yPos += 10;
+          }
+          const imgType = url.includes('png') ? 'PNG' : 'JPEG';
+          doc.addImage(url, imgType, 14, yPos, 100, 100, undefined, 'FAST');
+          yPos += 105;
+        } catch (e) {
+          console.error("Could not add image to PDF", e);
         }
-        const imgType = rapport.attachmentUrl.includes('png') ? 'PNG' : 'JPEG';
-        doc.addImage(rapport.attachmentUrl, imgType, 14, yPos, 100, 100, undefined, 'FAST');
-      } catch (e) {
-        console.error("Could not add image to PDF", e);
       }
-    }
+    });
     
     if (action === 'download') {
       doc.save(`Document_${rapport.title.replace(/\s+/g, '_')}_${rapport.date}.pdf`);
@@ -131,7 +139,8 @@ export const RapportsView: React.FC = () => {
     content: '',
     type: 'Report' as 'Report' | 'Instruction',
     category: 'Autre',
-    attachmentUrl: ''
+    attachmentUrl: '',
+    attachmentUrls: [] as string[]
   });
 
   const filteredRapports = React.useMemo(() => {
@@ -183,7 +192,10 @@ export const RapportsView: React.FC = () => {
             {state.currentUser === 'Fatihi Anas' && (
               <>
                 <button
-                  onClick={() => setEditingRapport(rapport)}
+                  onClick={() => setEditingRapport({
+                    ...rapport,
+                    attachmentUrls: rapport.attachmentUrls || (rapport.attachmentUrl ? [rapport.attachmentUrl] : [])
+                  })}
                   className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
                   title="Modifier"
                 >
@@ -248,6 +260,9 @@ export const RapportsView: React.FC = () => {
 
   const handleAddRapport = (e: React.FormEvent) => {
     e.preventDefault();
+    const firstAttachmentUrl = newRapport.attachmentUrls && newRapport.attachmentUrls.length > 0
+      ? newRapport.attachmentUrls[0]
+      : newRapport.attachmentUrl;
     const rapport: Rapport = {
       id: `r${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
@@ -255,19 +270,24 @@ export const RapportsView: React.FC = () => {
       content: newRapport.content,
       type: newRapport.type,
       category: newRapport.type === 'Report' ? newRapport.category : undefined,
-      attachmentUrl: newRapport.attachmentUrl || undefined,
+      attachmentUrl: firstAttachmentUrl || undefined,
+      attachmentUrls: newRapport.attachmentUrls || [],
       author: state.currentUser || 'Système'
     };
     addRapport(rapport);
     setShowAddModal(false);
-    setNewRapport({ title: '', content: '', type: 'Report', category: 'Autre', attachmentUrl: '' });
+    setNewRapport({ title: '', content: '', type: 'Report', category: 'Autre', attachmentUrl: '', attachmentUrls: [] });
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRapport) return;
+    const firstAttachmentUrl = editingRapport.attachmentUrls && editingRapport.attachmentUrls.length > 0
+      ? editingRapport.attachmentUrls[0]
+      : editingRapport.attachmentUrl;
     updateRapport({
       ...editingRapport,
+      attachmentUrl: firstAttachmentUrl,
       author: state.currentUser || 'Système'
     });
     setEditingRapport(null);
@@ -491,24 +511,11 @@ export const RapportsView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Pièce jointe (Image/PDF)</label>
-                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-xl hover:bg-slate-50 transition-colors cursor-pointer relative">
-                    <div className="space-y-1 text-center">
-                      <ImageIcon className="mx-auto h-12 w-12 text-slate-400" />
-                      <div className="flex text-sm text-slate-600 justify-center">
-                        <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-teal-600 hover:text-teal-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-teal-500">
-                          <span>Télécharger un fichier</span>
-                          <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/*,.pdf" />
-                        </label>
-                      </div>
-                      <p className="text-xs text-slate-500">PNG, JPG, PDF jusqu'à 10MB</p>
-                    </div>
-                  </div>
-                  {newRapport.attachmentUrl && (
-                    <p className="mt-2 text-sm text-emerald-600 font-medium flex items-center">
-                      <CheckCircle2 className="h-4 w-4 mr-1" /> Fichier attaché avec succès
-                    </p>
-                  )}
+                  <MultiImagePicker
+                    images={newRapport.attachmentUrls || []}
+                    onChange={(imgs) => setNewRapport({ ...newRapport, attachmentUrls: imgs })}
+                    label="Pièces jointes (Images)"
+                  />
                 </div>
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                   <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Annuler</button>
@@ -603,33 +610,11 @@ export const RapportsView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Pièce jointe (Image/PDF)</label>
-                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-xl hover:bg-slate-50 transition-colors cursor-pointer relative">
-                    <div className="space-y-1 text-center">
-                      <ImageIcon className="mx-auto h-12 w-12 text-slate-400" />
-                      <div className="flex text-sm text-slate-600 justify-center">
-                        <label htmlFor="edit-file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-teal-600 hover:text-teal-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-teal-500">
-                          <span>Télécharger un fichier</span>
-                          <input id="edit-file-upload" name="edit-file-upload" type="file" className="sr-only" onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                setEditingRapport({ ...editingRapport, attachmentUrl: reader.result as string });
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }} accept="image/*,.pdf" />
-                        </label>
-                      </div>
-                      <p className="text-xs text-slate-500">PNG, JPG, PDF jusqu'à 10MB</p>
-                    </div>
-                  </div>
-                  {editingRapport.attachmentUrl && (
-                    <p className="mt-2 text-sm text-emerald-600 font-medium flex items-center">
-                      <CheckCircle2 className="h-4 w-4 mr-1" /> Fichier attaché avec succès
-                    </p>
-                  )}
+                  <MultiImagePicker
+                    images={editingRapport.attachmentUrls || (editingRapport.attachmentUrl ? [editingRapport.attachmentUrl] : [])}
+                    onChange={(imgs) => setEditingRapport({ ...editingRapport, attachmentUrls: imgs })}
+                    label="Pièces jointes (Images)"
+                  />
                 </div>
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                   <button type="button" onClick={() => setEditingRapport(null)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Annuler</button>
