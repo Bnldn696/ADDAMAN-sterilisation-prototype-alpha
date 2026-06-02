@@ -65,19 +65,56 @@ export const MultiImagePicker: React.FC<MultiImagePickerProps> = ({ images, onCh
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    // Set matching dimensions
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    let w = video.videoWidth || 640;
+    let h = video.videoHeight || 480;
+    
+    // Resize down to 600px max to save space
+    const MAX_DIM = 600;
+    if (w > h && w > MAX_DIM) {
+      h = Math.floor(h * (MAX_DIM / w));
+      w = MAX_DIM;
+    } else if (h > MAX_DIM) {
+      w = Math.floor(w * (MAX_DIM / h));
+      h = MAX_DIM;
+    }
+    
+    canvas.width = w;
+    canvas.height = h;
     
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      ctx.drawImage(video, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.6); // Higher compression
       
       // Update state
       onChange([...images, dataUrl]);
       setCapturedCount(prev => prev + 1);
     }
+  };
+
+  const compressAndAddImage = (dataUrl: string, callback: (compressed: string) => void) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width;
+      let h = img.height;
+      const MAX_DIM = 600;
+      
+      if (w > h && w > MAX_DIM) {
+        h = Math.floor(h * (MAX_DIM/w));
+        w = MAX_DIM;
+      } else if (h > MAX_DIM) {
+        w = Math.floor(w * (MAX_DIM/h));
+        h = MAX_DIM;
+      }
+      
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', 0.6));
+    };
+    img.src = dataUrl;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,11 +129,18 @@ export const MultiImagePicker: React.FC<MultiImagePickerProps> = ({ images, onCh
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === 'string') {
-          loadedImages.push(reader.result);
-        }
-        processed++;
-        if (processed === fileList.length) {
-          onChange([...images, ...loadedImages]);
+          compressAndAddImage(reader.result, (compressed) => {
+            loadedImages.push(compressed);
+            processed++;
+            if (processed === fileList.length) {
+              onChange([...images, ...loadedImages]);
+            }
+          });
+        } else {
+          processed++;
+          if (processed === fileList.length) {
+            onChange([...images, ...loadedImages]);
+          }
         }
       };
       reader.readAsDataURL(file);

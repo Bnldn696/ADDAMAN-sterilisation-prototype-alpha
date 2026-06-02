@@ -48,7 +48,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   useEffect(() => {
-    localStorage.setItem('addaman_sterilization_data_v5', JSON.stringify(state));
+    try {
+      localStorage.setItem('addaman_sterilization_data_v5', JSON.stringify(state));
+    } catch (e) {
+      console.error('Save error', e);
+      alert('Erreur: Impossible d\'enregistrer les modifications (mémoire saturée). Réduisez le nombre de photos ou videz des anciens rapports.');
+    }
   }, [state]);
 
   const login = (password: string) => {
