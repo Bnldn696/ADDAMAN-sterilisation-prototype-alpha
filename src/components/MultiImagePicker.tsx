@@ -7,7 +7,7 @@ interface MultiImagePickerProps {
   label?: string;
 }
 
-export const MultiImagePicker: React.FC<MultiImagePickerProps> = ({ images, onChange, label }) => {
+export const MultiImagePicker: React.FC<MultiImagePickerProps> = ({ images = [], onChange, label }) => {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -92,13 +92,13 @@ export const MultiImagePicker: React.FC<MultiImagePickerProps> = ({ images, onCh
     }
   };
 
-  const compressAndAddImage = (dataUrl: string, callback: (compressed: string) => void) => {
+  const compressAndAddImage = (dataUrl: string, callback: (compressed: string | null) => void) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
       let w = img.width;
       let h = img.height;
-      const MAX_DIM = 600;
+      const MAX_DIM = 400; // Increased compression to avoid quota limits
       
       if (w > h && w > MAX_DIM) {
         h = Math.floor(h * (MAX_DIM/w));
@@ -112,39 +112,46 @@ export const MultiImagePicker: React.FC<MultiImagePickerProps> = ({ images, onCh
       canvas.height = h;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, w, h);
-      callback(canvas.toDataURL('image/jpeg', 0.6));
+      callback(canvas.toDataURL('image/jpeg', 0.5));
+    };
+    img.onerror = () => {
+      console.error("Failed to load image for compression");
+      callback(null);
     };
     img.src = dataUrl;
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
     const fileList = Array.from(files) as File[];
     const loadedImages: string[] = [];
-    let processed = 0;
 
-    fileList.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          compressAndAddImage(reader.result, (compressed) => {
-            loadedImages.push(compressed);
-            processed++;
-            if (processed === fileList.length) {
-              onChange([...images, ...loadedImages]);
-            }
-          });
-        } else {
-          processed++;
-          if (processed === fileList.length) {
-            onChange([...images, ...loadedImages]);
+    const processFile = (file: File): Promise<string | null> => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            compressAndAddImage(reader.result, (compressed) => {
+              resolve(compressed);
+            });
+          } else {
+            resolve(null);
           }
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+
+    for (const file of fileList) {
+      const compressed = await processFile(file);
+      if (compressed) {
+        loadedImages.push(compressed);
+      }
+    }
+    
+    onChange([...images, ...loadedImages]);
   };
 
   const removeImage = (indexToRemove: number) => {

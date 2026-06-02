@@ -112,6 +112,17 @@ export interface ReformeItem {
   comment?: string;
 }
 
+export interface BoiteExterne {
+  id: string;
+  name: string;
+  content?: string;
+  attachmentUrls?: string[];
+  dateEntre: string;
+  dateSortie?: string;
+  authorEntre: string;
+  authorSortie?: string;
+}
+
 export interface AppState {
   boites: Boite[];
   materiels: Materiel[];
@@ -121,4 +132,5 @@ export interface AppState {
   currentUser: string | null;
   notifications: Notification[];
   reformes: ReformeItem[];
+  boitesExternes?: BoiteExterne[];
 }

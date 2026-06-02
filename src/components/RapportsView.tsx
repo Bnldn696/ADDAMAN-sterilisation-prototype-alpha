@@ -2,14 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../hooks/useStore';
 import { Rapport } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, FileText, Plus, Calendar, X, Image as ImageIcon, Paperclip, CheckCircle2, Trash2, Edit2, Mail, Download, Eye, ArrowLeft, Tags } from 'lucide-react';
+import { Search, FileText, Plus, Calendar, X, Image as ImageIcon, Paperclip, CheckCircle2, Trash2, Edit2, Mail, Download, Eye, ArrowLeft, Tags, LogIn, LogOut, PackageOpen } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { MultiImagePicker } from './MultiImagePicker';
 
 export const RapportsView: React.FC = () => {
-  const { state, addRapport, deleteRapport, updateRapport } = useStore();
+  const { state, addRapport, deleteRapport, updateRapport, addBoiteExterne, updateBoiteExterne } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showBoiteExterneModal, setShowBoiteExterneModal] = useState(false);
+  const [newBoiteExterneName, setNewBoiteExterneName] = useState('');
+  const [newBoiteExterneContent, setNewBoiteExterneContent] = useState('');
+  const [newBoiteExterneAttachmentUrls, setNewBoiteExterneAttachmentUrls] = useState<string[]>([]);
   const [editingRapport, setEditingRapport] = useState<Rapport | null>(null);
   const [selectedPdfRapport, setSelectedPdfRapport] = useState<Rapport | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -258,6 +262,36 @@ export const RapportsView: React.FC = () => {
     </motion.div>
   );
 
+  const handleAddBoiteExterne = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBoiteExterneName.trim()) return;
+    
+    addBoiteExterne({
+      id: `be${Date.now()}`,
+      name: newBoiteExterneName,
+      content: newBoiteExterneContent,
+      attachmentUrls: newBoiteExterneAttachmentUrls,
+      dateEntre: new Date().toISOString(),
+      authorEntre: state.currentUser || 'Système',
+    });
+    
+    setNewBoiteExterneName('');
+    setNewBoiteExterneContent('');
+    setNewBoiteExterneAttachmentUrls([]);
+    setShowBoiteExterneModal(false);
+  };
+
+  const handleSortirBoiteExterne = (boiteId: string) => {
+    const boiteToUpdate = state.boitesExternes?.find(b => b.id === boiteId);
+    if (boiteToUpdate) {
+      updateBoiteExterne({
+        ...boiteToUpdate,
+        dateSortie: new Date().toISOString(),
+        authorSortie: state.currentUser || 'Système'
+      });
+    }
+  };
+
   const handleAddRapport = (e: React.FormEvent) => {
     e.preventDefault();
     const firstAttachmentUrl = newRapport.attachmentUrls && newRapport.attachmentUrls.length > 0
@@ -396,33 +430,81 @@ export const RapportsView: React.FC = () => {
           </motion.div>
         ) : !selectedDate ? (
             <motion.div
-              key="datesGrid"
+              key="datesGridWrapper"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6"
+              className="space-y-8"
             >
-                {uniqueDates.length > 0 ? uniqueDates.map(date => {
-                    const count = filteredRapports.filter(r => r.date === date).length;
-                    return (
-                        <button
-                            key={date}
-                            onClick={() => setSelectedDate(date)}
-                            className="bg-white border hover:border-teal-500 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 shadow-sm hover:shadow-md transition-all group"
-                        >
-                            <div className="bg-teal-50 text-teal-600 p-4 rounded-full group-hover:scale-110 transition-transform">
-                                <Calendar className="h-8 w-8" />
-                            </div>
-                            <span className="font-bold text-slate-900">{date}</span>
-                            <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full font-medium">{count} document{count > 1 ? 's' : ''}</span>
-                        </button>
-                    )
-                }) : (
-                    <div className="col-span-full py-20 text-center text-slate-400 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-                        <Calendar className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                        <p>Aucune date trouvée.</p>
+              {viewMode === 'Instruction' && (
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <PackageOpen className="h-5 w-5 text-indigo-500" />
+                      Boîtes Externes Actives
+                    </h3>
+                    <button
+                      onClick={() => setShowBoiteExterneModal(true)}
+                      className="text-sm px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium rounded-xl transition-colors flex items-center gap-1"
+                    >
+                      <LogIn className="h-4 w-4" /> Entrer une boîte
+                    </button>
+                  </div>
+                  
+                  {(!state.boitesExternes || state.boitesExternes.filter(b => !b.dateSortie).length === 0) ? (
+                    <div className="text-sm py-4 text-center text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
+                      <p>Aucune boîte externe présente.</p>
                     </div>
-                )}
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {state.boitesExternes.filter(b => !b.dateSortie).map(boite => (
+                        <div key={boite.id} className="border border-indigo-100 bg-indigo-50/30 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-sm text-indigo-900">{boite.name}</h4>
+                              <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded">En clinique</span>
+                            </div>
+                            <p className="text-xs text-indigo-600/70 mt-0.5">Entrée le {new Date(boite.dateEntre).toLocaleDateString()} à {new Date(boite.dateEntre).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                          <button
+                            onClick={() => handleSortirBoiteExterne(boite.id)}
+                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 rounded-lg transition-all font-medium text-xs"
+                          >
+                            <LogOut className="h-3.5 w-3.5" /> Sortir de la clinique
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 mb-4 ml-1">Archive par dates</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
+                  {uniqueDates.length > 0 ? uniqueDates.map(date => {
+                      const count = filteredRapports.filter(r => r.date === date).length;
+                      return (
+                          <button
+                              key={date}
+                              onClick={() => setSelectedDate(date)}
+                              className="bg-white border hover:border-teal-500 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 shadow-sm hover:shadow-md transition-all group"
+                          >
+                              <div className="bg-teal-50 text-teal-600 p-4 rounded-full group-hover:scale-110 transition-transform">
+                                  <Calendar className="h-8 w-8" />
+                              </div>
+                              <span className="font-bold text-slate-900">{date}</span>
+                              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full font-medium">{count} document{count > 1 ? 's' : ''}</span>
+                          </button>
+                      )
+                  }) : (
+                      <div className="col-span-full py-20 text-center text-slate-400 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                          <Calendar className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                          <p>Aucune date trouvée.</p>
+                      </div>
+                  )}
+                </div>
+              </div>
             </motion.div>
         ) : (
           <motion.div
@@ -520,6 +602,66 @@ export const RapportsView: React.FC = () => {
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                   <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Annuler</button>
                   <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-colors">Publier</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Boite Externe Modal */}
+      <AnimatePresence>
+        {showBoiteExterneModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            >
+              <div className="p-4 border-b border-indigo-100 flex justify-between items-center bg-indigo-50 shrink-0">
+                <h3 className="font-bold text-lg text-indigo-900 flex items-center gap-2">
+                  <LogIn className="h-5 w-5" /> Entrer une Boîte Externe
+                </h3>
+                <button onClick={() => setShowBoiteExterneModal(false)} className="p-2 text-indigo-400 hover:text-indigo-600 rounded-full transition-colors">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <form onSubmit={handleAddBoiteExterne} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nom de la boîte / Provenance</label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    value={newBoiteExterneName}
+                    onChange={(e) => setNewBoiteExterneName(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Ex: Boîte orthopédie Dr. Dupont..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Détails de la consigne</label>
+                  <textarea
+                    required
+                    rows={4}
+                    value={newBoiteExterneContent}
+                    onChange={(e) => setNewBoiteExterneContent(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                    placeholder="Détails de réception, état, ou instructions spécifiques..."
+                  />
+                </div>
+                <div>
+                  <MultiImagePicker
+                    images={newBoiteExterneAttachmentUrls}
+                    onChange={setNewBoiteExterneAttachmentUrls}
+                    label="Photos ou documents"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-2">Un rapport d'entrée sera ajouté dans les consignes générales.</p>
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button type="button" onClick={() => setShowBoiteExterneModal(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Annuler</button>
+                  <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors">Valider l'entrée</button>
                 </div>
               </form>
             </motion.div>
